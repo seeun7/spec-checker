@@ -11,13 +11,12 @@ llm = ChatGoogleGenerativeAI(
 )
 ``` 
 - 해당 부분에서 model API를 v1beta 버전에서 찾을 수 없다는 오류가 발생
-i. API KEY 문제인가? -> Google AI Studio에서 확인(정상적으로 발급된 상태)
-ii. model의 이름 문제인가? -> 우선 오타가 아님을 확인
+i. API KEY 문제인가? -> Google AI Studio에서 확인(정상적으로 발급된 상태)  
+ii. model의 이름 문제인가? -> 우선 오타가 아님을 확인  
 ```
 curl "https://generativelanguage.googleapis.com/v1/models?key="내 제미나이 API 키"
 ```
-터미널에 입력 -> 구글 API 서버에 직접 현재 가용한 키 목록 반환받음
--> 반환받은 키 목록에서 "name" 항목
+터미널에 입력 -> 구글 API 서버에 직접 현재 가용한 키 목록 반환받음 -> 반환받은 키 목록에서 "name" 항목  
 ```"name": "models/gemini-2.5-flash"
 "name": "models/gemini-2.5-pro"
 ```
