@@ -8,11 +8,12 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Spec-Checker API")
 
-# 클라이언트 요청 데이터 포맷 (Pydantic)
+# 클라이언트 요청 데이터 구조 정의 (Pydantic)
 class SpecRequest(BaseModel):
     image_base64: str
     user_spec: str
-
+    
+# 서버 response 구조 정의 
 class SpecResponse(BaseModel):
     software_name: str | None
     result: str

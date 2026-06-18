@@ -7,6 +7,8 @@ engine = create_engine(
     settings.DATABASE_URL, 
 )
 
+Base = declarative_base()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db(): # 세션 생성
