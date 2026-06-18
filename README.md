@@ -16,8 +16,8 @@ ii. model의 이름 문제인가? -> 우선 오타가 아님을 확인
 ```
 curl "https://generativelanguage.googleapis.com/v1/models?key="내 제미나이 API 키"
 ```
-터미널에 입력 -> 구글 API 서버에 직접 현재 가용한 키 목록 반환받음 -> 반환받은 키 목록에서 "name" 항목  
+- 터미널에 입력 -> 구글 API 서버에 현재 가용한 키 목록 반환 받음 -> 반환받은 키 목록에서 "name" 확인  
 ```"name": "models/gemini-2.5-flash"
 "name": "models/gemini-2.5-pro"
 ```
-등등으로 확인 -> 내가 model 변수에 입력한 이름과 완전히 같지 않아 models/ + 버전 이름 변경 -> 정상 작동
+- model 변수에 입력한 이름과 완전히 같지 않아 models/ + 버전 이름 변경 -> 정상 작동
