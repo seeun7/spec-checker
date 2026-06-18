@@ -2,7 +2,8 @@
 
 
 ### 주요 트러블슈팅  
-#### 1. 제미나이 API 404 NOT FOUND 에러
+#### 1. LLM API 404 NOT FOUND 에러
+- 초기 OPENAI를 이용해 구현했으나 반복되는 404 에러로 제미나이 모델으로 시도
 ```
 llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash", 
@@ -10,7 +11,7 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.1
 )
 ``` 
-- 해당 부분에서 model API를 v1beta 버전에서 찾을 수 없다는 오류가 발생  
+- 마찬가지로 404 에러 발생. 해당 부분에 model API를 v1beta 버전에서 찾을 수 없다는 오류 메시지  
 i. API KEY 문제인가? -> Google AI Studio에서 확인(정상적으로 발급된 상태)  
 ii. model의 이름 문제인가? -> 우선 오타가 아님을 확인  
 ```
