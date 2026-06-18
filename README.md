@@ -3,11 +3,12 @@
 
 ### 주요 트러블슈팅  
 #### 1. 제미나이 API 404 NOT FOUND 에러
-''' llm = ChatGoogleGenerativeAI(
+'''python
+llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash", 
     api_key=settings.GEMINI_API_KEY, 
     temperature=0.1
-) ''' 
+)''' 
 - 해당 부분에서 model API를 v1beta 버전에서 찾을 수 없다는 오류가 발생
 i. API KEY 문제인가? -> Google AI Studio에서 확인(정상적으로 발급된 상태)
 ii. model의 이름 문제인가? -> 우선 오타가 아님을 확인
