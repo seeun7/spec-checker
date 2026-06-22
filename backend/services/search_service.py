@@ -1,12 +1,12 @@
-from duckduckgo_search import DDGS
+from duckduckgo_search import AsyncDDGS
 
-def search_requirements(software_name: str) -> str:
-    # DuckDuckGo를 이용하여 소프트웨어의 시스템 요구사항 검색
+async def search_requirements(software_name: str) -> str: # DuckDuckGo를 이용하여 소프트웨어의 시스템 요구사항 검색
 
     query = f"{software_name} 공식 시스템 요구사항 PC 권장 사양"
     
     try:
-        results = DDGS().text(query, max_results=3) # 상위 3개의 검색 결과를 가져옴
+        async with AsyncDDGS() as ddgs:
+            results = await ddgs.atext(query, max_results=3)
         
         if not results:
             return "검색 결과를 찾을 수 없습니다."
