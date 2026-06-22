@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.core.database import Base
 
 class SoftwareCache(Base):
@@ -10,4 +10,4 @@ class SoftwareCache(Base):
     id = Column(Integer, primary_key=True, index=True)
     software_name = Column(String, unique=True, index=True, nullable=False)
     requirements_text = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -1,5 +1,5 @@
 import asyncio
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 
 async def search_requirements(software_name: str) -> str: # DuckDuckGo를 이용하여 소프트웨어의 시스템 요구사항 검색
