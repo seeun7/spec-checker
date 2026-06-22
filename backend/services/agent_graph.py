@@ -1,4 +1,6 @@
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional 
+import asyncio # 동기식 DB 호출, 검색 함수가 이벤트 루프 블로킹 방지
+from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, END
 from langchain_google_genai import ChatGoogleGenerativeAI # 구글 Gemini 모듈
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -22,13 +24,16 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.1
 )
 
-# 노드 함수들 정의
-def node_analyze_vision(state: AgentState) -> dict:
-    """Vision AI를 사용하여 이미지가 소프트웨어인지 파악하고 이름을 추출합니다."""
+class VisionResult(BaseModel):
+    is_software: bool = Field(description="이미지가 소프트웨어인지 여부")
+    software_name: Optional[str] = Field(description="소프트웨어의 정확한 공식 이름. 소프트웨어가 아니면 None")
+
+# 노드 함수 정의 
+async def node_analyze_vision(state: AgentState) -> dict: # 이미지가 소프트웨어인지 파악하고 이름을 추출
     sys_msg = SystemMessage(content=(
         "당신은 이미지를 분석하는 AI입니다. "
-        "사용자가 올린 이미지가 게임이나 소프트웨어의 로고, 화면, 스크린샷인지 확인하세요. "
-        "맞다면 해당 게임이나 소프트웨어의 '정확한 공식 이름'만 달랑 반환하고, 아니라면 'NOT_SOFTWARE'라고 반환하세요."
+        "사용자가 올린 이미지가 소프트웨어의 로고, 화면, 스크린샷인지 확인하세요. "
+        "정확한 소프트웨어의 이름과 소프트웨어 여부를 판별하여 반환하세요."
     ))
     
     user_msg = HumanMessage(content=[
@@ -36,42 +41,45 @@ def node_analyze_vision(state: AgentState) -> dict:
         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{state['image_base64']}"}}
     ])
     
-    response = llm.invoke([sys_msg, user_msg])
-    result_text = response.content.strip()
+    # 구조화된 출력 적용 
+    structured_llm = llm.with_structured_output(VisionResult)
+    result = await structured_llm.ainvoke([sys_msg, user_msg])
     
-    # Gemini가 가끔 마크다운이나 불필요한 공백을 넣을 수도 있어서 정리하도록 함
-    result_text = result_text.replace("```", "").strip()
-    
-    if "NOT_SOFTWARE" in result_text.upper():
-        return {"is_software": False, "software_name": None}
-    else:
-        return {"is_software": True, "software_name": result_text}
+    return {
+        "is_software": result.is_software, 
+        "software_name": result.software_name
+    }
 
-def node_check_db_or_search(state: AgentState) -> dict:
-    """PostgreSQL 캐시를 먼저 확인하고, 없으면 웹 검색 후 DB에 저장합니다."""
+async def node_check_db_or_search(state: AgentState) -> dict: # PostgreSQL 캐시를 먼저 확인하고 없으면 웹 검색 후 저장
     software_name = state["software_name"]
-    db = SessionLocal()
     
-    try:
-        cached_data = db.query(SoftwareCache).filter(SoftwareCache.software_name == software_name).first()
-        
-        if cached_data:
-            print(f"[CACHE HIT] DB에서 '{software_name}' 사양 로드 완료")
-            req_text = cached_data.requirements_text
-        else:
-            print(f"[CACHE MISS] DuckDuckGo 검색 및 DB 저장 진행: '{software_name}'")
-            req_text = search_requirements(software_name)
+    # DB 접근 로직 별도 함수로 분리
+    def fetch_from_db():
+        with SessionLocal() as db:
+            return db.query(SoftwareCache).filter(SoftwareCache.software_name == software_name).first()
             
+    def save_to_db(req_text):
+        with SessionLocal() as db:
             new_cache = SoftwareCache(software_name=software_name, requirements_text=req_text)
             db.add(new_cache)
             db.commit()
-            
-        return {"requirements_text": req_text}
-    finally:
-        db.close()
 
-def node_generate_comparison(state: AgentState) -> dict:
-    """사용자의 PC 사양과 검색된 권장 사양을 비교 분석하여 결과를 생성합니다."""
+    # asyncio.to_thread -> 워커 스레드에서 실행
+    cached_data = await asyncio.to_thread(fetch_from_db)
+    
+    if cached_data:
+        print(f"[CACHE HIT] '{software_name}'")
+        req_text = cached_data.requirements_text
+    else:
+        print(f"[CACHE MISS] 검색 및 DB 저장 진행 '{software_name}'")
+        req_text = await search_requirements(software_name)
+        
+        if req_text and "검색 결과를 찾을 수 없습니다" not in req_text:
+            await asyncio.to_thread(save_to_db, req_text)
+        
+    return {"requirements_text": req_text}
+
+async def node_generate_comparison(state: AgentState) -> dict: # 사용자의 PC 사양과 검색된 권장 사양을 비교 분석하여 결과를 생성
     sys_msg = SystemMessage(content=(
         "당신은 친절하고 전문적인 PC 하드웨어 전문가입니다. "
         "사용자의 PC가 해당 게임/소프트웨어를 구동할 수 있을지 알기 쉽게 설명해주세요."
@@ -83,11 +91,10 @@ def node_generate_comparison(state: AgentState) -> dict:
     
     위 정보를 바탕으로 해당 소프트웨어가 사용자 PC에서 원활하게 구동될지 비교해서 분석 결과를 작성해주세요.
     """
-    response = llm.invoke([sys_msg, HumanMessage(content=prompt)])
+    response = await llm.ainvoke([sys_msg, HumanMessage(content=prompt)])
     return {"final_answer": response.content}
 
-def node_handle_rejection(state: AgentState) -> dict:
-    """이미지가 소프트웨어가 아닐 경우의 예외 처리 응답을 생성합니다."""
+async def node_handle_rejection(state: AgentState) -> dict: # 이미지가 소프트웨어가 아닐 경우의 예외 처리 응답
     return {"final_answer": "업로드하신 이미지가 게임이나 소프트웨어 관련 이미지가 아닙니다. 게임 화면이나 로고 이미지를 업로드해 주세요."}
 
 # 라우팅 로직 (조건부 엣지)

@@ -6,6 +6,8 @@ import base64
 import platform
 import psutil
 
+_cached_sys_specs = None
+
 # Windows 환경에서 GPU 정보를 가져오기 위한 WMI 모듈 설정
 try:
     import wmi
@@ -15,8 +17,10 @@ except ImportError:
 
 router = APIRouter()
 
-def get_system_specs() -> str:
-    """웹 서버가 실행 중인 로컬 PC의 하드웨어 정보를 추출합니다."""
+def get_system_specs() -> str: # 로컬 PC의 하드웨어 정보 추출
+    global _cached_sys_specs
+    if _cached_sys_specs:
+        return _cached_sys_specs
     os_info = f"{platform.system()} {platform.release()}"
     cpu_info = platform.processor()
     ram_info = round(psutil.virtual_memory().total / (1024**3), 2)
@@ -31,7 +35,8 @@ def get_system_specs() -> str:
         except Exception:
             gpu_info = "GPU 인식 실패"
     
-    return f"[운영체제] {os_info}\n[CPU] {cpu_info}\n[RAM] {ram_info} GB\n[GPU] {gpu_info}"
+    _cached_sys_specs = f"[운영체제] {os_info}\n[CPU] {cpu_info}\n[RAM] {ram_info} GB\n[GPU] {gpu_info}"
+    return _cached_sys_specs
 
 # 메인 웹페이지(HTML) 렌더링 
 @router.get("/", response_class=HTMLResponse)
@@ -64,7 +69,7 @@ async def read_root():
             
             <form id="uploadForm">
                 <label class="upload-box" id="drop-zone">
-                    <p id="drop-text">📸 클릭하거나 이미지를 드래그 앤 드롭 하세요!</p>
+                    <p id="drop-text">📸 클릭하거나 이미지를 끌어다 놓으세요!</p>
                     <input type="file" id="imageInput" accept="image/*" required>
                     <img id="preview" class="img-preview" src="#" alt="미리보기">
                 </label>
@@ -157,20 +162,20 @@ async def analyze_spec_web(file: UploadFile = File(...)):
             "final_answer": None
         }
         
-        print("[INFO] LangGraph 에이전트 실행 중...")
-        result_state = spec_agent.invoke(initial_state)
+        print("[INFO] 에이전트 실행 중")
+        result_state = await spec_agent.ainvoke(initial_state)
         
         final_ans = result_state.get("final_answer")
         if not final_ans:
             final_ans = "AI가 응답을 생성하지 못했습니다."
 
-        print("[INFO] 분석 완료- 클라이언트로 반환.")
+        print("[INFO] 분석 완료")
         return {
             "software_name": result_state.get("software_name"),
             "result": final_ans
         }
         
     except Exception as e:
-        print("[백엔드 오류 발생]")
+        print("[백엔드 오류 ]")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
