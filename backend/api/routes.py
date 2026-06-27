@@ -31,11 +31,17 @@ def get_system_specs() -> str:
     if HAS_WMI and platform.system() == "Windows":
         try:
             w = wmi.WMI()
+            # CPU 명칭 가져오기 
+            cpus = w.Win32_Processor()
+            if cpus:
+                cpu_info = cpus[0].Name.strip()
+                
+            # GPU 명칭 가져오기
             gpus = w.Win32_VideoController()
             if gpus:
                 gpu_info = gpus[0].Name
         except Exception:
-            gpu_info = "GPU 인식 실패"
+            gpu_info = "하드웨어 인식 실패"
     
     _cached_sys_specs = f"[운영체제] {os_info}\n[CPU] {cpu_info}\n[RAM] {ram_info} GB\n[GPU] {gpu_info}"
     return _cached_sys_specs
