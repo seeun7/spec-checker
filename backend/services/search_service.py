@@ -1,21 +1,32 @@
 import asyncio
 from ddgs import DDGS
 
+# DuckDuckGo를 이용하여 소프트웨어의 시스템 요구사항 검색
+async def search_requirements(software_name: str) -> str: 
 
-async def search_requirements(software_name: str) -> str: # DuckDuckGo를 이용하여 소프트웨어의 시스템 요구사항 검색
-
-    query = f"{software_name} 공식 시스템 요구사항 PC 권장 사양"
+    queries = [
+        f"{software_name} pc system requirements",      # 1: 영문 검색
+        f"{software_name} minimum specifications pc",   # 2: 영문 최소 사양 검색
+        f"{software_name} PC 시스템 권장 사양"            # 3: 한국어 검색
+    ]
     
     def sync_search():
         with DDGS() as ddgs:
-            return list(ddgs.text(query, max_results=3))
-            
+            all_results = []
+            for query in queries:
+                results = list(ddgs.text(query, max_results=4)) 
+                if results:
+                    all_results.extend(results)
+                    break
+            return all_results  
+        
     try:
-        # 동기식 라이브러리를 사용하지만 백그라운드 스레드에서 실행한 뒤 결과만 비동기로 받아옴
         results = await asyncio.to_thread(sync_search)
+        
         if not results:
-            return "검색 결과를 찾을 수 없습니다."
+            return "검색 결과를 찾을 수 없습니다. 이름이 정확한지 확인해 주세요."
             
+        # 웹 검색 요약 텍스트를 하나로 결합
         scraped_text = "\n\n".join([f"- {r.get('body', '')}" for r in results])
         return scraped_text
 
