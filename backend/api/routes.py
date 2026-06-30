@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, Response
 from backend.services.agent_graph import spec_agent 
 import traceback
 import base64
@@ -54,7 +54,7 @@ async def read_root():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Spec-Checker</title>
+        <title>SpecCheck AI 웹 버전</title>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; }
@@ -63,11 +63,18 @@ async def read_root():
             .upload-box { border: 2px dashed #3498db; padding: 40px; border-radius: 8px; margin-bottom: 20px; cursor: pointer; transition: 0.3s; display: block; }
             .upload-box:hover { background-color: #f0f8ff; }
             input[type="file"] { display: none; }
-            .btn { background-color: #3498db; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; transition: 0.3s; font-weight: bold; width: 100%; }
+            .btn { background-color: #3498db; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 6px; cursor: pointer; transition: 0.3s; font-weight: bold; width: 100%; margin-top: 15px;}
             .btn:hover { background-color: #2980b9; }
             #loading { display: none; margin-top: 20px; color: #e67e22; font-weight: bold; }
             
-            /* 결과 박스 및 마크다운 표(Table) 스타일 추가 */
+            /* 수동 입력 폼 관련 CSS 추가 */
+            .mode-selector { margin-bottom: 20px; text-align: left; background: #ecf0f1; padding: 15px; border-radius: 8px; }
+            .mode-selector label { margin-right: 15px; font-weight: bold; cursor: pointer; }
+            #manual-input-box { display: none; text-align: left; margin-bottom: 20px; }
+            .input-group { margin-bottom: 10px; }
+            .input-group label { display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #34495e; }
+            .input-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+            
             #result-box { margin-top: 30px; text-align: left; background-color: #f9f9f9; padding: 25px; border-radius: 8px; border-left: 5px solid #2ecc71; display: none; line-height: 1.6;}
             #res-text table { width: 100%; border-collapse: collapse; margin: 15px 0; background-color: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
             #res-text th, #res-text td { border: 1px solid #ddd; padding: 12px; text-align: left; font-size: 14px; }
@@ -79,19 +86,44 @@ async def read_root():
     </head>
     <body>
         <div class="container">
-            <h1>Spec-Checker</h1>
-            <p>소프트웨어 스크린샷을 올리면 내 PC 사양과 비교해 드립니다!</p>
+            <h1>🎮 Spec-Checker</h1>
+            <p>게임이나 소프트웨어 스크린샷을 올리면, PC 사양과 비교해 드립니다!</p>
             
             <form id="uploadForm">
                 <label class="upload-box" id="drop-zone">
-                    <p id="drop-text">클릭하거나 이미지를 끌어다 놓으세요!</p>
+                    <p id="drop-text">📸 클릭하거나 이미지를 드래그 앤 드롭 하세요!</p>
                     <input type="file" id="imageInput" accept="image/*" required>
                     <img id="preview" class="img-preview" src="#" alt="미리보기">
                 </label>
-                <button type="submit" class="btn">내 PC 사양으로 분석하기</button>
+                
+                <div class="mode-selector">
+                    <label><input type="radio" name="spec_mode" value="auto" checked> 내 PC 사양 자동 분석</label>
+                    <label><input type="radio" name="spec_mode" value="manual"> 직접 사양 입력하기</label>
+                </div>
+
+                <div id="manual-input-box">
+                    <div class="input-group">
+                        <label>운영체제 (OS)</label>
+                        <input type="text" id="m_os" placeholder="예: Windows 11">
+                    </div>
+                    <div class="input-group">
+                        <label>CPU</label>
+                        <input type="text" id="m_cpu" placeholder="예: Intel Core i5-12400F">
+                    </div>
+                    <div class="input-group">
+                        <label>RAM (GB)</label>
+                        <input type="number" id="m_ram" placeholder="예: 16">
+                    </div>
+                    <div class="input-group">
+                        <label>그래픽카드 (GPU)</label>
+                        <input type="text" id="m_gpu" placeholder="예: RTX 3060">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn">분석 시작하기</button>
             </form>
             
-            <div id="loading">이미지를 분석하고 검색 중입니다...<br>(약 10~20초 소요될 수 있습니다)</div>
+            <div id="loading">이미지를 분석하고 웹 검색 중입니다...<br>(약 10~20초 소요될 수 있습니다)</div>
             
             <div id="result-box">
                 <h3 id="res-title" style="color: #2c3e50; margin-top: 0;"></h3>
@@ -104,6 +136,19 @@ async def read_root():
             const fileInput = document.getElementById('imageInput');
             const preview = document.getElementById('preview');
             const dropText = document.getElementById('drop-text');
+            const modeRadios = document.getElementsByName('spec_mode');
+            const manualBox = document.getElementById('manual-input-box');
+
+            // 토글 선택에 따라 수동 입력 폼 숨기기/보이기
+            modeRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    if(e.target.value === 'manual') {
+                        manualBox.style.display = 'block';
+                    } else {
+                        manualBox.style.display = 'none';
+                    }
+                });
+            });
 
             fileInput.addEventListener('change', function() {
                 const file = this.files[0];
@@ -128,6 +173,18 @@ async def read_root():
 
                 const formData = new FormData();
                 formData.append('file', file);
+                
+                // 현재 선택된 모드 파악
+                const selectedMode = document.querySelector('input[name="spec_mode"]:checked').value;
+                formData.append('spec_mode', selectedMode);
+                
+                // 수동 입력 모드일 경우 데이터 추가
+                if(selectedMode === 'manual') {
+                    formData.append('manual_os', document.getElementById('m_os').value);
+                    formData.append('manual_cpu', document.getElementById('m_cpu').value);
+                    formData.append('manual_ram', document.getElementById('m_ram').value);
+                    formData.append('manual_gpu', document.getElementById('m_gpu').value);
+                }
 
                 try {
                     const response = await fetch('/analyze-web', {
@@ -139,10 +196,7 @@ async def read_root():
                     
                     if (response.ok) {
                         document.getElementById('res-title').innerText = "인식된 소프트웨어: " + (data.software_name || "알 수 없음");
-                        
-                        // 핵심 수정: 마크다운 텍스트를 HTML로 변환하여 삽입!
                         document.getElementById('res-text').innerHTML = marked.parse(data.result);
-                        
                         document.getElementById('result-box').style.display = 'block';
                     } else {
                         alert("에러 발생: " + data.detail);
@@ -160,12 +214,27 @@ async def read_root():
     return HTMLResponse(content=html_content)
 
 @router.post("/analyze-web")
-async def analyze_spec_web(file: UploadFile = File(...)):
+async def analyze_spec_web(
+    file: UploadFile = File(...),
+    spec_mode: str = Form("auto"),
+    manual_os: str = Form(""),
+    manual_cpu: str = Form(""),
+    manual_ram: str = Form(""),
+    manual_gpu: str = Form("")
+):
     try:
         contents = await file.read()
         base64_image = base64.b64encode(contents).decode('utf-8')
-        
-        user_specs = get_system_specs()
+      
+        if spec_mode == "manual":
+            user_specs = (
+                f"[운영체제] {manual_os or '알 수 없음'}\n"
+                f"[CPU] {manual_cpu or '알 수 없음'}\n"
+                f"[RAM] {manual_ram or '알 수 없음'} GB\n"
+                f"[GPU] {manual_gpu or '알 수 없음'}"
+            )
+        else:
+            user_specs = get_system_specs()
         
         initial_state = {
             "image_base64": base64_image,
@@ -175,7 +244,6 @@ async def analyze_spec_web(file: UploadFile = File(...)):
             "requirements_text": None,
             "final_answer": None
         }
-        
         result_state = await spec_agent.ainvoke(initial_state)
         
         final_ans = result_state.get("final_answer", "AI가 응답을 생성하지 못했습니다.")
